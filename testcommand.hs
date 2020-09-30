@@ -1,0 +1,1 @@
+:def test const $ return $ unlines [":reload",":main"]
