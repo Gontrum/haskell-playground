@@ -86,15 +86,14 @@ clash (Patient meds) names = meds
 
 
 allMedicinesAreTakenOn :: Day -> [Medicine] -> [Name] -> Bool
-allMedicinesAreTakenOn day meds names = 
-    if ((not isTest1) || isTest67) && isTest8_9_10
-        then True
-        else False
-    where   isTest67 = sort ["penicillin", "aspirin", "brandNewMedicine"] == sort (map getName meds)
-            isTest1 = not (names == (map getName meds))
-            isTest8_9_10 = allDaysAreTheSame (concat (map getDays meds)) 
+allMedicinesAreTakenOn day meds names =  namedMedsAreTaken && allMedsWhereOnTheSameDay
+    where   namedMedsAreTaken = sort (intersect names medNames) == sort names
+            allMedsWhereOnTheSameDay = allDaysAreTheSame $ concat medDays
+            allDaysAreTheSame :: [Day] -> Bool
             allDaysAreTheSame [] = True
-            allDaysAreTheSame (firstDay:rest) = foldl (\res day -> res && day == firstDay) True (firstDay:rest)
+            allDaysAreTheSame all@(firstDay:rest) = foldl (\res day -> res && day == firstDay) True (firstDay:rest) 
+            medNames = map getName meds
+            medDays = map getDays meds
 
 -- Tests
 main :: IO ()
@@ -150,6 +149,13 @@ main = hspec $ do
                 medicineList = [medicine1, medicine2, medicine3]
                 nameList = ["penicillin", "brandNewMedicine"]
             allMedicinesAreTakenOn (fromGregorian 2020 1 1) medicineList nameList `shouldBe` True
+        it "should return true when the medicines 'penicillin' and 'Placebo', but also 'aspirin' were found and taken on the same day" $ do
+            let medicine1 = penicillin prescription_January_First
+                medicine2 = Medicine "Placebo" [prescription_January_First]
+                medicine3 = aspirin prescription_January_First
+                medicineList = [medicine1, medicine2, medicine3]
+                nameList = ["penicillin", "Placebo"]
+            allMedicinesAreTakenOn (fromGregorian 2020 1 1) medicineList nameList `shouldBe` True
         it "should return true when the medicines 'penicillin' and 'aspirin' were found and taken on the same day (2.2.2020)" $ do
             let medicine1 = penicillin prescription_February_Second
                 medicine2 = aspirin prescription_February_Second
@@ -162,13 +168,29 @@ main = hspec $ do
                 medicineList = [medicine1, medicine2]
                 nameList = ["penicillin", "aspirin"]
             allMedicinesAreTakenOn (fromGregorian 2020 3 3) medicineList nameList `shouldBe` True
-        it "should return false when the medicines 'penicillin' and 'brandNewMedicine' and 'aspirin' where found, but 'aspirin' was taken on a different day" $ do
+        it "should return false when the medicines 'penicillin' and 'brandNewMedicine' and 'aspirin' were found, but 'aspirin' was taken on a different day" $ do
             let medicine1 = penicillin prescription_January_First
                 medicine2 = Medicine "brandNewMedicine" [prescription_January_First]
                 medicine3 = aspirin prescription_March_Third
                 medicineList = [medicine1, medicine2, medicine3]
                 nameList = ["penicillin", "brandNewMedicine", "aspirin"]
             allMedicinesAreTakenOn (fromGregorian 2020 1 1) medicineList nameList `shouldBe` False
+        it "should return true when the medicines 'penicillin' and 'brandNewMedicine' and 'aspirin' were found, and 'aspirin' taken on another day, too" $ do
+            let medicine1 = penicillin prescription_January_First
+                medicine2 = Medicine "brandNewMedicine" [prescription_January_First]
+                medicine_asp_day1 = aspirin prescription_January_First
+                medicine_asp_day2 = aspirin (Prescription (fromGregorian 2020 1 2) 1)
+                medicineList = [medicine1, medicine2, medicine_asp_day1, medicine_asp_day2]
+                nameList = ["penicillin", "brandNewMedicine", "aspirin"]
+            allMedicinesAreTakenOn (fromGregorian 2020 1 1) medicineList nameList `shouldBe` True
+        it "should return true when the medicines 'penicillin' and 'brandNewMedicine' and 'aspirin' were found, and 'aspirin' taken on 02.01.2020, too" $ do
+            let medicine1 = penicillin prescription_January_First
+                medicine2 = Medicine "brandNewMedicine" [prescription_January_First]
+                medicine_asp_day1 = aspirin prescription_January_First
+                medicine_asp_day2 = aspirin prescription_February_Second
+                medicineList = [medicine1, medicine2, medicine_asp_day1, medicine_asp_day2]
+                nameList = ["penicillin", "brandNewMedicine", "aspirin"]
+            allMedicinesAreTakenOn (fromGregorian 2020 1 1) medicineList nameList `shouldBe` True
 
     xdescribe "medicine clash" $ do
         it "should return empty list for not clashing medicines" $ do
