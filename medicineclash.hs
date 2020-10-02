@@ -89,27 +89,27 @@ clash (Patient meds) names = meds
 allMedicinesAreTakenOn :: Day -> [Medicine] -> [Name] -> Bool
 allMedicinesAreTakenOn day meds names =  namedMedsAreTaken && allMedsWhereOnTheSameDay
     where   namedMedsAreTaken = sort (intersect names medNames) == sort names
-            -- allMedsWhereOnTheSameDay = allDaysAreTheSame $ concat medDays
-            allMedsWhereOnTheSameDay = if containsANameWithMoreThanOneDay (buildmap meds) then True else allDaysAreTheSame $ concat medDays
+            allMedsWhereOnTheSameDay = if containsANameWithMoreThanOneDay (mapNamesToDays meds) then True else allDaysAreTheSame $ concat medDays
             allDaysAreTheSame :: [Day] -> Bool
             allDaysAreTheSame [] = True
             allDaysAreTheSame all@(firstDay:rest) = foldl (\res day -> res && day == firstDay) True (firstDay:rest) 
             medNames = map getName meds
             medDays = map getDays meds
-            containsANameWithMoreThanOneDay = foldl xxx False
-            xxx acc days = if acc == False then length days > 1 else False
+containsANameWithMoreThanOneDay :: Map String [Day] -> Bool
+containsANameWithMoreThanOneDay = foldl reducer False
+    where reducer acc days = if acc == True then True else length days > 1
 
 
-buildmap :: [Medicine] -> Map String [Day]
-buildmap = foldl reducer empty
-
-reducer :: Map Name [Day] -> Medicine -> Map Name [Day]
-reducer acc (Medicine name prescriptions) = insert name mergedDays acc
-    where   prescriptionDays = map (\(Prescription days _) -> days) prescriptions :: [Day]
-            existingNames = Data.Map.lookup name acc :: Maybe [Day]
-            orEmptyList (Just content) = content
-            orEmptyList Nothing = []
-            mergedDays = removeDuplicates $ prescriptionDays ++ (orEmptyList existingNames) :: [Day]
+mapNamesToDays :: [Medicine] -> Map String [Day]
+mapNamesToDays = foldl mapNamesToDaysReducer empty
+mapNamesToDaysReducer :: Map Name [Day] -> Medicine -> Map Name [Day]
+mapNamesToDaysReducer acc (Medicine name prescriptions) = insert name mergedDays acc
+        where   mergedDays = removeDuplicates $ prescriptionDays ++ existingNames :: [Day]
+                prescriptionDays = map (\(Prescription days _) -> days) prescriptions :: [Day]
+                existingNames = orEmptyList lookupNames :: [Day]
+                lookupNames = Data.Map.lookup name acc :: Maybe [Day]
+                orEmptyList (Just content) = content :: [Day]
+                orEmptyList Nothing = [] :: [Day]
 
 removeDuplicates :: Eq a => [a] -> [a]
 removeDuplicates = foldl (\acc curr -> if curr `elem` acc then acc else curr:acc) []
@@ -124,27 +124,34 @@ main = hspec $ do
         prescription_February_Second = Prescription (fromGregorian 2020 2 2) 1
         prescription_March_Third = Prescription (fromGregorian 2020 3 3) 1
 
-    describe "buildMap" $ do
+    describe "containsANameWithMoreThanOneDay" $ do 
+        it "should be True if given map contains one name with more than one day" $ do
+            containsANameWithMoreThanOneDay (fromList [("penicillin", [fromGregorian 2020 1 1]), ("brandNewMedicine", [fromGregorian 2020 1 1]), ("aspirin", [fromGregorian 2020 1 1, fromGregorian 2020 2 2])]) `shouldBe` True
+        it "should be False if given map contains nothing" $ do
+            containsANameWithMoreThanOneDay empty `shouldBe` False
+        it "should be False if given map contains only names with one day" $ do
+            containsANameWithMoreThanOneDay (fromList [("name", [fromGregorian 2020 1 1]), ("name2", [fromGregorian 2020 1 2])]) `shouldBe` False
+    describe "mapNamesToDays" $ do
         it "should create a map with a single name and day, when one medicine was given" $ do
             let medicine1 = penicillin prescription_January_First
-            buildmap [medicine1] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1)])
+            mapNamesToDays [medicine1] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1)])
         it "should create a map with two names with a day for each, when two medicines with different names where given" $ do
             let medicine1 = penicillin prescription_January_First
                 medicine2 = aspirin prescription_January_First
-            buildmap [medicine1, medicine2] `shouldBe` (fromList [("aspirin", [(fromGregorian 2020 1 1)]), ("penicillin", [(fromGregorian 2020 1 1 )])])
+            mapNamesToDays [medicine1, medicine2] `shouldBe` (fromList [("aspirin", [(fromGregorian 2020 1 1)]), ("penicillin", [(fromGregorian 2020 1 1 )])])
         it "should create a map with a single name with two days, when two medicines with the same name but different days were given" $ do
             let medicine1 = penicillin prescription_January_First
                 medicine2 = penicillin prescription_February_Second
-            buildmap [medicine1, medicine2] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1), (fromGregorian 2020 2 2)])
+            mapNamesToDays [medicine1, medicine2] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1), (fromGregorian 2020 2 2)])
         it "should remove duplicated days in the same names" $ do
             let medicine1 = penicillin prescription_January_First
                 medicine2 = penicillin prescription_January_First
-            buildmap [medicine1, medicine2] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1)])
+            mapNamesToDays [medicine1, medicine2] `shouldBe` (singleton "penicillin" [(fromGregorian 2020 1 1)])
         it "should create a map with two medicines, one with one day and one with two days" $ do
             let medicine1 = penicillin prescription_January_First
                 medicine2 = penicillin prescription_February_Second
                 medicine3 = aspirin prescription_January_First
-            buildmap [medicine1, medicine2, medicine3] `shouldBe` (fromList [("aspirin", [(fromGregorian 2020 1 1)]), ("penicillin", [(fromGregorian 2020 1 1), (fromGregorian 2020 2 2)])])
+            mapNamesToDays [medicine1, medicine2, medicine3] `shouldBe` (fromList [("aspirin", [(fromGregorian 2020 1 1)]), ("penicillin", [(fromGregorian 2020 1 1), (fromGregorian 2020 2 2)])])
 
     describe "allMedicinesAreTakenOn" $ do 
         it "should return false when only some of the given names were taken on a given day" $ do
