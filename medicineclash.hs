@@ -60,10 +60,14 @@ clash (Patient meds) names = foldl reducer (daysWhenMedicineWasTaken (firstMedic
     where reducer :: [DispenseDate] -> Medicine -> [DispenseDate]
           reducer acc med = intersect (daysWhenMedicineWasTaken med) acc
           filteredMedicine :: [Medicine]
-          filteredMedicine = filter (\(Medicine name _) -> name `elem` names) meds
+          filteredMedicine = mergeNamedMedicines meds names
           firstMedicine :: [Medicine] -> Medicine
           firstMedicine (first:_) = first
 
+mergeNamedMedicines :: [Medicine] -> [Name] -> [Medicine]
+mergeNamedMedicines medicines names = map (\name -> (mergeToSingleMedicine (filterByName name medicines))) names
+  where   filterByName :: Name -> [Medicine] -> [Medicine]
+          filterByName name medicines = filter (\(Medicine medName _) -> name == medName) medicines
 mergeToSingleMedicine :: [Medicine] -> Medicine
 mergeToSingleMedicine (firstMed:medicines) = foldl mergeTwoMedicines firstMed medicines
 mergeTwoMedicines :: Medicine -> Medicine -> Medicine
