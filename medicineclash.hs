@@ -64,8 +64,8 @@ clash (Patient meds) names = foldl reducer (daysWhenMedicineWasTaken (firstMedic
           firstMedicine :: [Medicine] -> Medicine
           firstMedicine (first:_) = first
 
-mergeTwoOneMedicine :: [Medicine] -> Medicine
-mergeTwoOneMedicine (firstMed:medicines) = foldl mergeTwoMedicines firstMed medicines
+mergeToSingleMedicine :: [Medicine] -> Medicine
+mergeToSingleMedicine (firstMed:medicines) = foldl mergeTwoMedicines firstMed medicines
 mergeTwoMedicines :: Medicine -> Medicine -> Medicine
 mergeTwoMedicines (Medicine name prescriptions) (Medicine _ prescriptions2) = Medicine name $ prescriptions ++ prescriptions2
 
