@@ -1,9 +1,10 @@
 import Data.Function ((&))
 import Data.Time (Day, fromGregorian, addDays)
 import Test.Hspec ( hspec, describe, it, shouldBe )
+import Data.List (groupBy,  intersect ) 
 
 type Name = String
-type DaysSupply = Int
+type DaysSupply = Integer
 type DispenseDate = Day
 data Prescription = Prescription DispenseDate DaysSupply
 prescriptionForToday :: Prescription
@@ -33,7 +34,13 @@ isInDispenseTime :: DispenseDate -> Medicine -> Bool
 isInDispenseTime day (Medicine _ prescriptions) = all condition prescriptions
     where   condition presciption = day <= lastDay presciption && day >= (firstDay presciption)
             firstDay (Prescription fd _) = fd
-            lastDay (Prescription fd days) = addDays (toInteger days) fd
+            lastDay (Prescription fd days) = addDays days fd
+
+daysWhenMedicineWasTaken :: Medicine -> [DispenseDate]
+daysWhenMedicineWasTaken (Medicine _ presciptions) = removeDuplicates $ concat $ map daysPerPrescription presciptions
+daysPerPrescription :: Prescription -> [DispenseDate]
+daysPerPrescription (Prescription _ 0) = []
+daysPerPrescription (Prescription date numberOfDays) = date:(daysPerPrescription (Prescription (addDays 1 date) (numberOfDays - 1)))
 
 removeDuplicates :: Eq a => [a] -> [a]
 removeDuplicates = foldl (\acc curr -> if curr `elem` acc then acc else curr : acc) []
@@ -41,12 +48,26 @@ removeDuplicates = foldl (\acc curr -> if curr `elem` acc then acc else curr : a
 subset :: (Foldable t, Eq a) => [a] -> t a -> Bool
 subset a b = null [x | x <- a, (x `elem` b) == False]
 
-clash :: Patient -> [Name] -> [DispenseDate]
-clash (Patient meds) names = meds
+clashx :: Patient -> [Name] -> [DispenseDate]
+clashx (Patient meds) names = meds
     & map getDays
     & concat
     & filter (\day -> allMedicinesAreTakenOn day meds names)
     & removeDuplicates
+
+clash :: Patient -> [Name] -> [DispenseDate]
+clash (Patient meds) names = foldl reducer (daysWhenMedicineWasTaken (firstMedicine filteredMedicine)) filteredMedicine
+    where reducer :: [DispenseDate] -> Medicine -> [DispenseDate]
+          reducer acc med = intersect (daysWhenMedicineWasTaken med) acc
+          filteredMedicine :: [Medicine]
+          filteredMedicine = filter (\(Medicine name _) -> name `elem` names) meds
+          firstMedicine :: [Medicine] -> Medicine
+          firstMedicine (first:_) = first
+
+mergeTwoOneMedicine :: [Medicine] -> Medicine
+mergeTwoOneMedicine (firstMed:medicines) = foldl mergeTwoMedicines firstMed medicines
+mergeTwoMedicines :: Medicine -> Medicine -> Medicine
+mergeTwoMedicines (Medicine name prescriptions) (Medicine _ prescriptions2) = Medicine name $ prescriptions ++ prescriptions2
 
 -- Tests
 main :: IO ()
@@ -56,6 +77,17 @@ main = hspec $ do
       prescription_January_First = Prescription (fromGregorian 2020 1 1) 1
       prescription_February_Second = Prescription (fromGregorian 2020 2 2) 1
       prescription_March_Third = Prescription (fromGregorian 2020 3 3) 1
+
+
+  describe "daysWhenMedicineWasTaken" $ do
+    it "Medicin with 32 days of supply should contain 32 days"  $ do
+      length (daysWhenMedicineWasTaken (penicillin (Prescription (fromGregorian 2020 1 1) 32))) `shouldBe` 32
+    it "Medicin with 0 days of supply should contain 0 days"  $ do
+      length (daysWhenMedicineWasTaken (penicillin (Prescription (fromGregorian 2020 1 1) 0))) `shouldBe` 0
+    it "Medicin with two prescriptions with 20 days each should contain 40 days"  $ do
+      length (daysWhenMedicineWasTaken (Medicine "penicillin" [(Prescription (fromGregorian 2020 1 1) 20), (Prescription (fromGregorian 2020 12 1) 20)])) `shouldBe` 40
+    it "Medicin with two prescriptions with 20 days each but with overlapping of 10 days should contain 30 days"  $ do
+      length (daysWhenMedicineWasTaken (Medicine "penicillin" [(Prescription (fromGregorian 2020 1 1) 20), (Prescription (fromGregorian 2020 1 11) 20)])) `shouldBe` 30
 
   describe "isInDispenseTime" $ do 
       it "day inside dispense time should result in true" $ do
