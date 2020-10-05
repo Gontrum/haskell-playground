@@ -1,5 +1,5 @@
 import Data.Function ((&))
-import Data.Time (Day, fromGregorian)
+import Data.Time (Day, fromGregorian, addDays)
 import Test.Hspec ( hspec, describe, it, shouldBe )
 
 type Name = String
@@ -27,7 +27,13 @@ allMedicinesAreTakenOn day meds names = names `subset` namesOfMedicinesTakenOn d
   where     namesOfMedicinesTakenOn day = getNames $ (medicinesTakenOn day) meds
 
 medicinesTakenOn :: DispenseDate -> [Medicine] -> [Medicine]
-medicinesTakenOn day = filter (\med -> day `elem` getDays med)
+medicinesTakenOn day = filter (\med -> day `isInDispenseTime` med)
+
+isInDispenseTime :: DispenseDate -> Medicine -> Bool
+isInDispenseTime day (Medicine _ prescriptions) = all condition prescriptions
+    where   condition presciption = day <= lastDay presciption && day >= (firstDay presciption)
+            firstDay (Prescription fd _) = fd
+            lastDay (Prescription fd days) = addDays (toInteger days) fd
 
 removeDuplicates :: Eq a => [a] -> [a]
 removeDuplicates = foldl (\acc curr -> if curr `elem` acc then acc else curr : acc) []
@@ -50,6 +56,20 @@ main = hspec $ do
       prescription_January_First = Prescription (fromGregorian 2020 1 1) 1
       prescription_February_Second = Prescription (fromGregorian 2020 2 2) 1
       prescription_March_Third = Prescription (fromGregorian 2020 3 3) 1
+
+  describe "isInDispenseTime" $ do 
+      it "day inside dispense time should result in true" $ do
+        isInDispenseTime (fromGregorian 2020 1 15) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 30]) `shouldBe` True
+      it "first day of dispense time should result in true" $ do
+        isInDispenseTime (fromGregorian 2020 1 1) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 30]) `shouldBe` True
+      it "last day of dispense time should result in true" $ do
+        isInDispenseTime (fromGregorian 2020 2 1) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 31]) `shouldBe` True
+      it "day after last day of dispense time should result in false" $ do
+        isInDispenseTime (fromGregorian 2020 2 1) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 30]) `shouldBe` False
+      it "day before first day of dispense time should result in false" $ do
+        isInDispenseTime (fromGregorian 2019 12 31) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 30]) `shouldBe` False
+      it "day far away of dispense time should result in false" $ do
+        isInDispenseTime (fromGregorian 1945 5 8) (Medicine "penicillin" [Prescription (fromGregorian 2020 1 1) 30]) `shouldBe` False
 
   describe "allMedicinesAreTakenOn" $ do
     it "should return false when only some of the given names were taken on a given day" $ do
@@ -168,6 +188,11 @@ main = hspec $ do
           medicine2_day2 = aspirin prescription_February_Second
           patient = Patient [medicine1_day1, medicine2_day1, medicine1_day2, medicine2_day2]
       clash patient ["aspirin", "penicillin"] `shouldBe` [fromGregorian 2020 2 2, fromGregorian 2020 1 1]
+    it "should return a clash for two medicines within dispense time" $ do
+      let medicine1_day1 = penicillin (Prescription (fromGregorian 2020 1 1) 90)
+          medicine2_day2 = aspirin (Prescription (fromGregorian 2020 2 2) 1)
+          patient = Patient [medicine1_day1, medicine2_day2]
+      clash patient ["aspirin", "penicillin"] `shouldBe` [fromGregorian 2020 2 2]
 
 -- allMedicinesAreTakenOn :: Day -> [Medicine] -> [Name] -> Bool
 -- allMedicinesAreTakenOn day meds names = meds
